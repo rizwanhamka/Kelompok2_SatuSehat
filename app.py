@@ -1,8 +1,10 @@
 from datetime import datetime, timezone
 
 import requests
+import sqlite3
 from flask import Flask, jsonify
 from flasgger import Swagger
+from flask_cors import CORS
 
 app = Flask(__name__)
 
@@ -15,6 +17,59 @@ app.config["SWAGGER"] = {
 }
 
 swagger = Swagger(app)
+
+CORS(app)
+
+def init_db():
+    conn = sqlite3.connect("satusehat.db")
+    cursor = conn.cursor()
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS patients (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            patient_id TEXT,
+            patient_name TEXT,
+            birth_date TEXT,
+            gender TEXT,
+            nik TEXT,
+            created_at TEXT
+        )
+    """)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS practitioners (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            practitioner_id TEXT,
+            practitioner_name TEXT,
+            nik TEXT,
+            created_at TEXT
+        )
+    """)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS locations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            location_id TEXT,
+            name TEXT,
+            status TEXT,
+            created_at TEXT
+        )
+    """)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS encounters (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            encounter_id TEXT,
+            patient_id TEXT,
+            patient_name TEXT,
+            practitioner_id TEXT,
+            practitioner_name TEXT,
+            location_id TEXT,
+            status TEXT,
+            start_time TEXT,
+            created_at TEXT
+        )
+    """)
+    conn.commit()
+    conn.close()
+
+init_db()
 
 # ─────────────────────────────────────────────────────────────
 # SATU SEHAT CONFIG
@@ -110,7 +165,26 @@ def search_patient():
 
         response.raise_for_status()
 
-        return jsonify(response.json())
+        data = response.json()
+        entries = data.get("entry", [])
+        if entries:
+            r = entries[0]["resource"]
+            conn = sqlite3.connect("satusehat.db")
+            cursor = conn.cursor()
+            cursor.execute("""
+                INSERT INTO patients (patient_id, patient_name, birth_date, gender, nik, created_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, (
+                r.get("id"),
+                r.get("name", [{}])[0].get("text"),
+                r.get("birthDate"),
+                r.get("gender"),
+                NIK_PASIEN,
+                datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+            ))
+            conn.commit()
+            conn.close()
+        return jsonify(data)
 
     except Exception as e:
         return jsonify({
@@ -159,7 +233,24 @@ def search_practitioner():
 
         response.raise_for_status()
 
-        return jsonify(response.json())
+        data = response.json()
+        entries = data.get("entry", [])
+        if entries:
+            r = entries[0]["resource"]
+            conn = sqlite3.connect("satusehat.db")
+            cursor = conn.cursor()
+            cursor.execute("""
+                INSERT INTO practitioners (practitioner_id, practitioner_name, nik, created_at)
+                VALUES (?, ?, ?, ?)
+            """, (
+                r.get("id"),
+                r.get("name", [{}])[0].get("text"),
+                NIK_DOKTER,
+                datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+            ))
+            conn.commit()
+            conn.close()
+        return jsonify(data)
 
     except Exception as e:
         return jsonify({
@@ -225,7 +316,21 @@ def create_location():
 
         response.raise_for_status()
 
-        return jsonify(response.json()), 201
+        data = response.json()
+        conn = sqlite3.connect("satusehat.db")
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO locations (location_id, name, status, created_at)
+            VALUES (?, ?, ?, ?)
+        """, (
+            data.get("id"),
+            data.get("name"),
+            data.get("status"),
+            datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        ))
+        conn.commit()
+        conn.close()
+        return jsonify(data), 201
 
     except Exception as e:
         return jsonify({
@@ -396,13 +501,77 @@ def create_encounter():
 
         encounter_response.raise_for_status()
 
-        return jsonify(encounter_response.json()), 201
+        encounter_data = encounter_response.json()
+
+        conn = sqlite3.connect("satusehat.db")
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO encounters (
+                encounter_id, patient_id, patient_name,
+                practitioner_id, practitioner_name,
+                location_id, status, start_time, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            encounter_data.get("id"),
+            patient_id,
+            patient_name,
+            practitioner_id,
+            practitioner_name,
+            location_id,
+            encounter_data.get("status"),
+            now,
+            datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        ))
+        conn.commit()
+        conn.close()
+
+        return jsonify(encounter_data), 201
 
     except Exception as e:
         return jsonify({
             "status": "error",
             "message": str(e)
         }), 500
+    
+@app.route("/encounters", methods=["GET"])
+def get_encounters():
+    conn = sqlite3.connect("satusehat.db")
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM encounters ORDER BY id DESC")
+    rows = [dict(row) for row in cursor.fetchall()]
+    conn.close()
+    return jsonify(rows)    
+
+@app.route("/patients", methods=["GET"])
+def get_patients():
+    conn = sqlite3.connect("satusehat.db")
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM patients ORDER BY id DESC")
+    rows = [dict(row) for row in cursor.fetchall()]
+    conn.close()
+    return jsonify(rows)
+
+@app.route("/practitioners", methods=["GET"])
+def get_practitioners():
+    conn = sqlite3.connect("satusehat.db")
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM practitioners ORDER BY id DESC")
+    rows = [dict(row) for row in cursor.fetchall()]
+    conn.close()
+    return jsonify(rows)
+
+@app.route("/locations", methods=["GET"])
+def get_locations():
+    conn = sqlite3.connect("satusehat.db")
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM locations ORDER BY id DESC")
+    rows = [dict(row) for row in cursor.fetchall()]
+    conn.close()
+    return jsonify(rows)
 
 
 # ─────────────────────────────────────────────────────────────

@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SATU SEHAT Dashboard</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Segoe UI', sans-serif; background: #f4f6f9; color: #1a1a2e; }
+
+    header {
+      background: #1a73e8;
+      color: white;
+      padding: 1rem 2rem;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    header h1 { font-size: 20px; font-weight: 600; }
+    header span { font-size: 13px; opacity: 0.8; }
+
+    .container { max-width: 960px; margin: 2rem auto; padding: 0 1.5rem; }
+
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+
+    .card {
+      background: white;
+      border-radius: 12px;
+      border: 1px solid #e0e0e0;
+      padding: 1.25rem 1.5rem;
+    }
+    .card h2 {
+      font-size: 15px;
+      font-weight: 600;
+      margin-bottom: 1rem;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: #1a1a2e;
+    }
+    .card h2 .badge {
+      font-size: 11px;
+      font-weight: 500;
+      padding: 2px 8px;
+      border-radius: 99px;
+    }
+    .badge-get { background: #e8f4fd; color: #1565c0; }
+    .badge-post { background: #e8f5e9; color: #2e7d32; }
+
+    button {
+      background: #1a73e8;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      padding: 8px 18px;
+      font-size: 14px;
+      cursor: pointer;
+      transition: background 0.2s;
+      width: 100%;
+      margin-top: 0.5rem;
+    }
+    button:hover { background: #1558b0; }
+    button.danger { background: #e53935; }
+    button.danger:hover { background: #b71c1c; }
+
+    .result {
+      margin-top: 1rem;
+      background: #f8f9fa;
+      border-radius: 8px;
+      padding: 0.75rem 1rem;
+      font-size: 12px;
+      font-family: monospace;
+      max-height: 200px;
+      overflow-y: auto;
+      color: #333;
+      white-space: pre-wrap;
+      word-break: break-word;
+      display: none;
+      border: 1px solid #e0e0e0;
+    }
+
+    .status {
+      font-size: 12px;
+      padding: 4px 10px;
+      border-radius: 6px;
+      display: inline-block;
+      margin-top: 8px;
+    }
+    .status.ok { background: #e8f5e9; color: #2e7d32; }
+    .status.err { background: #ffebee; color: #c62828; }
+    .status.loading { background: #fff8e1; color: #f57f17; }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+      margin-top: 0.5rem;
+    }
+    th {
+      background: #f0f4ff;
+      padding: 8px 10px;
+      text-align: left;
+      font-weight: 600;
+      color: #1a1a2e;
+      border-bottom: 1px solid #dde3f0;
+    }
+    td {
+      padding: 7px 10px;
+      border-bottom: 1px solid #f0f0f0;
+      color: #333;
+      word-break: break-all;
+    }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: #f9f9ff; }
+
+    .full { grid-column: 1 / -1; }
+
+    .empty { color: #999; font-size: 13px; text-align: center; padding: 1.5rem 0; }
+  </style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>SATU SEHAT Dashboard</h1>
+    <span>FHIR R4 Sandbox Integration</span>
+  </div>
+</header>
+
+<div class="container">
+  <div class="grid">
+
+        <!-- PATIENT TABLE -->
+        <div class="card full">
+        <h2>
+            Patient Records (SQLite)
+            <button onclick="loadPatients()" style="width:auto; padding:4px 14px; font-size:12px; margin:0; margin-left:auto;">Refresh</button>
+        </h2>
+        <div id="patients-table">
+                <div class="empty">Klik Refresh untuk load data patient</div>
+            </div>
+        </div>
+
+        <!-- PRACTITIONER TABLE -->
+        <div class="card full">
+        <h2>
+            Practitioner Records (SQLite)
+            <button onclick="loadPractitioners()" style="width:auto; padding:4px 14px; font-size:12px; margin:0; margin-left:auto;">Refresh</button>
+        </h2>
+        <div id="practitioners-table">
+            <div class="empty">Klik Refresh untuk load data practitioner</div>
+        </div>
+    </div>
+
+    <!-- LOCATION TABLE -->
+    <div class="card full">
+        <h2>
+            Location Records (SQLite)
+            <button onclick="loadLocations()" style="width:auto; padding:4px 14px; font-size:12px; margin:0; margin-left:auto;">Refresh</button>
+        </h2>
+        <div id="locations-table">
+            <div class="empty">Klik Refresh untuk load data location</div>
+        </div>
+    </div>
+
+    <!-- PATIENT -->
+    <div class="card">
+      <h2><span class="badge badge-get">GET</span> Search Patient</h2>
+      <button onclick="searchPatient()">Search Patient by NIK</button>
+      <div id="status-patient" class="status" style="display:none"></div>
+      <div class="result" id="result-patient"></div>
+    </div>
+
+    <!-- PRACTITIONER -->
+    <div class="card">
+      <h2><span class="badge badge-get">GET</span> Search Practitioner</h2>
+      <button onclick="searchPractitioner()">Search Practitioner by NIK</button>
+      <div id="status-practitioner" class="status" style="display:none"></div>
+      <div class="result" id="result-practitioner"></div>
+    </div>
+
+    <!-- LOCATION -->
+    <div class="card">
+      <h2><span class="badge badge-post">POST</span> Create Location</h2>
+      <button onclick="createLocation()">Create Location</button>
+      <div id="status-location" class="status" style="display:none"></div>
+      <div class="result" id="result-location"></div>
+    </div>
+
+    <!-- ENCOUNTER -->
+    <div class="card">
+      <h2><span class="badge badge-post">POST</span> Create Encounter</h2>
+      <button onclick="createEncounter()">Create Encounter</button>
+      <div id="status-encounter" class="status" style="display:none"></div>
+      <div class="result" id="result-encounter"></div>
+    </div>
+
+    <!-- ENCOUNTER TABLE -->
+    <div class="card full">
+      <h2>
+        Encounter Records (SQLite)
+        <button onclick="loadEncounters()" style="width:auto; padding:4px 14px; font-size:12px; margin:0; margin-left:auto;">Refresh</button>
+      </h2>
+      <div id="encounters-table">
+        <div class="empty">Klik Refresh untuk load data encounter</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  const BASE = 'http://127.0.0.1:5000';
+
+  function setStatus(id, msg, type) {
+    const el = document.getElementById('status-' + id);
+    el.textContent = msg;
+    el.className = 'status ' + type;
+    el.style.display = 'inline-block';
+  }
+
+  function showResult(id, data) {
+    const el = document.getElementById('result-' + id);
+    el.textContent = JSON.stringify(data, null, 2);
+    el.style.display = 'block';
+  }
+
+  async function searchPatient() {
+    setStatus('patient', 'Loading...', 'loading');
+    try {
+      const res = await fetch(`${BASE}/patient`);
+      const data = await res.json();
+      setStatus('patient', '200 OK', 'ok');
+      showResult('patient', data);
+    } catch (e) {
+      setStatus('patient', 'Error: ' + e.message, 'err');
+    }
+  }
+
+  async function searchPractitioner() {
+    setStatus('practitioner', 'Loading...', 'loading');
+    try {
+      const res = await fetch(`${BASE}/practitioner`);
+      const data = await res.json();
+      setStatus('practitioner', '200 OK', 'ok');
+      showResult('practitioner', data);
+    } catch (e) {
+      setStatus('practitioner', 'Error: ' + e.message, 'err');
+    }
+  }
+
+  async function createLocation() {
+    setStatus('location', 'Loading...', 'loading');
+    try {
+      const res = await fetch(`${BASE}/location`, { method: 'POST' });
+      const data = await res.json();
+      setStatus('location', res.status === 201 ? '201 Created' : res.status, res.status === 201 ? 'ok' : 'err');
+      showResult('location', data);
+    } catch (e) {
+      setStatus('location', 'Error: ' + e.message, 'err');
+    }
+  }
+
+  async function createEncounter() {
+    setStatus('encounter', 'Loading...', 'loading');
+    try {
+      const res = await fetch(`${BASE}/encounter`, { method: 'POST' });
+      const data = await res.json();
+      setStatus('encounter', res.status === 201 ? '201 Created' : res.status, res.status === 201 ? 'ok' : 'err');
+      showResult('encounter', data);
+      loadEncounters();
+    } catch (e) {
+      setStatus('encounter', 'Error: ' + e.message, 'err');
+    }
+  }
+
+  async function loadEncounters() {
+    try {
+      const res = await fetch(`${BASE}/encounters`);
+      const data = await res.json();
+      const container = document.getElementById('encounters-table');
+      if (!data.length) {
+        container.innerHTML = '<div class="empty">Belum ada data encounter tersimpan</div>';
+        return;
+      }
+      let html = `<table>
+        <tr>
+          <th>Encounter ID</th>
+          <th>Patient</th>
+          <th>Practitioner</th>
+          <th>Location ID</th>
+          <th>Status</th>
+          <th>Start Time</th>
+        </tr>`;
+      for (const row of data) {
+        html += `<tr>
+          <td>${row.encounter_id || '-'}</td>
+          <td>${row.patient_name || '-'}<br><small style="color:#999">${row.patient_id || ''}</small></td>
+          <td>${row.practitioner_name || '-'}<br><small style="color:#999">${row.practitioner_id || ''}</small></td>
+          <td>${row.location_id || '-'}</td>
+          <td>${row.status || '-'}</td>
+          <td>${row.start_time || '-'}</td>
+        </tr>`;
+      }
+      html += '</table>';
+      container.innerHTML = html;
+    } catch (e) {
+      document.getElementById('encounters-table').innerHTML = '<div class="empty">Gagal load data: ' + e.message + '</div>';
+    }
+  }
+  async function loadPatients() {
+  try {
+    const res = await fetch(`${BASE}/patients`);
+    const data = await res.json();
+    const container = document.getElementById('patients-table');
+    if (!data.length) { container.innerHTML = '<div class="empty">Belum ada data patient tersimpan</div>'; return; }
+    let html = `<table><tr><th>Patient ID</th><th>Nama</th><th>NIK</th><th>Gender</th><th>Birth Date</th><th>Created At</th></tr>`;
+    for (const row of data) {
+      html += `<tr>
+        <td>${row.patient_id || '-'}</td>
+        <td>${row.patient_name || '-'}</td>
+        <td>${row.nik || '-'}</td>
+        <td>${row.gender || '-'}</td>
+        <td>${row.birth_date || '-'}</td>
+        <td>${row.created_at || '-'}</td>
+      </tr>`;
+    }
+    html += '</table>';
+    container.innerHTML = html;
+  } catch (e) {
+    document.getElementById('patients-table').innerHTML = '<div class="empty">Gagal load data: ' + e.message + '</div>';
+  }
+}
+
+async function loadPractitioners() {
+  try {
+    const res = await fetch(`${BASE}/practitioners`);
+    const data = await res.json();
+    const container = document.getElementById('practitioners-table');
+    if (!data.length) { container.innerHTML = '<div class="empty">Belum ada data practitioner tersimpan</div>'; return; }
+    let html = `<table><tr><th>Practitioner ID</th><th>Nama</th><th>NIK</th><th>Created At</th></tr>`;
+    for (const row of data) {
+      html += `<tr>
+        <td>${row.practitioner_id || '-'}</td>
+        <td>${row.practitioner_name || '-'}</td>
+        <td>${row.nik || '-'}</td>
+        <td>${row.created_at || '-'}</td>
+      </tr>`;
+    }
+    html += '</table>';
+    container.innerHTML = html;
+  } catch (e) {
+    document.getElementById('practitioners-table').innerHTML = '<div class="empty">Gagal load data: ' + e.message + '</div>';
+  }
+}
+
+async function loadLocations() {
+  try {
+    const res = await fetch(`${BASE}/locations`);
+    const data = await res.json();
+    const container = document.getElementById('locations-table');
+    if (!data.length) { container.innerHTML = '<div class="empty">Belum ada data location tersimpan</div>'; return; }
+    let html = `<table><tr><th>Location ID</th><th>Nama</th><th>Status</th><th>Created At</th></tr>`;
+    for (const row of data) {
+      html += `<tr>
+        <td>${row.location_id || '-'}</td>
+        <td>${row.name || '-'}</td>
+        <td>${row.status || '-'}</td>
+        <td>${row.created_at || '-'}</td>
+      </tr>`;
+    }
+    html += '</table>';
+    container.innerHTML = html;
+  } catch (e) {
+    document.getElementById('locations-table').innerHTML = '<div class="empty">Gagal load data: ' + e.message + '</div>';
+  }
+}
+</script>
+
+</body>
+</html>
